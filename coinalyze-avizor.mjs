@@ -1,12 +1,12 @@
 // ============================================================
-// Carmon Tradegar · coinalyze-avizor.mjs
-// Capa "avizor": derivados AGREGADOS (todos los exchanges) desde Coinalyze.
-// Por activo y por temporalidad (4H, 12H, D): funding, open interest, CVD, liquidaciones.
+// Carmon Tradegar · coinalyze-avizor.mjs  (v3)
+// Capa "avizor": derivados AGREGADOS (varios exchanges) desde Coinalyze.
+// Por activo: funding actual + OI, CVD y liquidaciones.
+// Truco de eficiencia: pide la serie de 1H UNA vez por endpoint y deriva
+// las ventanas 1H/4H/12H/D agregando (3× menos llamadas → cabe en el límite gratis).
 // Escribe avizor.json que lee el escáner MAGO.
 //
-// La clave va en la variable de entorno COINALYZE_API_KEY (secreto de GitHub, nunca en el código).
-// A prueba de fallos: si algo no responde, se omite y se anota en el log.
-// Node 18+.  Uso:  COINALYZE_API_KEY=xxx node coinalyze-avizor.mjs
+// Clave en variable de entorno COINALYZE_API_KEY (secreto de GitHub). Node 18+.
 // ============================================================
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,86 +17,63 @@ const KEY = process.env.COINALYZE_API_KEY;
 if (!KEY) { console.error("Falta COINALYZE_API_KEY"); process.exit(1); }
 const BASE = "https://api.coinalyze.net/v1";
 
-// Activos (base asset) — mismos que el escáner MAGO
 const ASSETS = ["BTC","ETH","BCH","SOL","AAVE","LTC","LINK","AVAX","TON","XRP","SUI","APT","XLM","ADA","ARB","HBAR","ZEC","TAO","INJ","NEAR","RENDER","DOGE","QNT","VIRTUAL","IOTA","ENA","PEPE"];
-const TFS = [["1hour","1H"], ["4hour","4H"], ["12hour","12H"], ["daily","D"]];
+const TF_LABELS = ["1H","4H","12H","D"];
+const TF_HOURS = { "1H":1, "4H":4, "12H":12, "D":24 };
+const MAX_SYMS = 6; // agregamos los ~6 exchanges mayores por activo
 
-const MAX_SYMS = 6;   // agregamos los ~6 exchanges mayores por activo (≈90% del volumen)
 let calls = 0;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function jget(path, params, tries = 0) {
   const url = new URL(BASE + path);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
-  await sleep(2000); // ritmo base
+  await sleep(1800);
   const r = await fetch(url, { headers: { api_key: KEY, accept: "application/json" } });
   calls++;
-  if (r.status === 429) { // límite: esperar el reset de la ventana y reintentar
-    if (tries < 5) { await sleep(45000); return jget(path, params, tries + 1); }
-    throw new Error("429 tras reintentos en " + path);
-  }
+  if (r.status === 429) { if (tries < 5) { await sleep(45000); return jget(path, params, tries + 1); } throw new Error("429 tras reintentos en " + path); }
   if (!r.ok) throw new Error("HTTP " + r.status + " en " + path);
   return r.json();
 }
 
-// 1) Descubrir símbolos de perpetuos por activo base (agregando todos los exchanges)
+const nowSec = () => Math.floor(Date.now() / 1000);
+const sum = a => a.reduce((x, y) => x + (y || 0), 0);
+
+// Suma por timestamp entre los símbolos agregados → serie [{t,v}] ascendente
+function aggByT(resArr, valFn) {
+  const acc = {};
+  for (const s of (resArr || [])) for (const p of (s.history || [])) acc[p.t] = (acc[p.t] || 0) + (valFn(p) || 0);
+  return Object.keys(acc).map(Number).sort((a, b) => a - b).map(t => ({ t, v: acc[t] }));
+}
+
 async function symbolMap() {
   const markets = await jget("/future-markets");
   const map = {};
   for (const m of markets) {
     if (!m.is_perpetual) continue;
     const base = (m.base_asset || "").toUpperCase();
-    if (!ASSETS.includes(base)) continue;
-    (map[base] ||= []).push(m.symbol);
+    if (ASSETS.includes(base)) (map[base] ||= []).push(m.symbol);
   }
   return map;
 }
 
-const nowSec = () => Math.floor(Date.now() / 1000);
-const sum = (a) => a.reduce((x, y) => x + y, 0);
-
-// Agrega una serie histórica sumando por timestamp entre varios símbolos.
-function aggByT(resArr, valFn) {
-  const acc = {}; // t -> valor sumado
-  for (const series of resArr) {
-    for (const p of (series.history || [])) { acc[p.t] = (acc[p.t] || 0) + (valFn(p) || 0); }
-  }
-  const ts = Object.keys(acc).map(Number).sort((a, b) => a - b);
-  return ts.map(t => ({ t, v: acc[t] }));
-}
-
 async function avizorAsset(base, symbols) {
-  const syms = symbols.slice(0, MAX_SYMS).join(","); // top exchanges (agregado)
+  const syms = symbols.slice(0, MAX_SYMS).join(",");
   const out = {};
-  // Funding actual (media entre exchanges)
-  try {
-    const f = await jget("/funding-rate", { symbols: syms });
-    const vals = f.map(x => x.value).filter(v => v != null);
-    out.funding = vals.length ? +(sum(vals) / vals.length).toFixed(4) : null;
-  } catch (e) { out.fundingErr = e.message; }
+  const to = nowSec(), from = to - 60 * 60 * 24 * 30; // 30 días de velas 1h
 
-  for (const [itv, key] of TFS) {
-    const to = nowSec(), from = to - 60 * 60 * 24 * 30; // 30 días
-    const tf = {};
-    // Open Interest (agregado, en USD)
-    try {
-      const oi = await jget("/open-interest-history", { symbols: syms, interval: itv, from, to, convert_to_usd: "true" });
-      const agg = aggByT(oi, p => p.c); // cierre de OI por vela
-      if (agg.length >= 2) { tf.oi = agg[agg.length - 1].v; tf.oiChg = +((agg[agg.length - 1].v / agg[0].v - 1) * 100).toFixed(1); }
-    } catch (e) { tf.oiErr = e.message; }
-    // CVD (de ohlcv: buy - sell = 2*bv - v), acumulado en la ventana
-    try {
-      const oh = await jget("/ohlcv-history", { symbols: syms, interval: itv, from, to });
-      const agg = aggByT(oh, p => (2 * (p.bv || 0) - (p.v || 0)));
-      let cum = 0; const cvd = agg.map(p => (cum += p.v, cum));
-      if (cvd.length) { tf.cvd = Math.round(cvd[cvd.length - 1]); tf.cvdDir = cvd[cvd.length - 1] > (cvd[Math.max(0, cvd.length - 6)] || 0) ? 1 : -1; }
-    } catch (e) { tf.cvdErr = e.message; }
-    // Liquidaciones (long/short en la última vela)
-    try {
-      const lq = await jget("/liquidation-history", { symbols: syms, interval: itv, from, to, convert_to_usd: "true" });
-      const longs = aggByT(lq, p => p.l), shorts = aggByT(lq, p => p.s);
-      tf.liqLong = longs.length ? Math.round(longs[longs.length - 1].v) : 0;
-      tf.liqShort = shorts.length ? Math.round(shorts[shorts.length - 1].v) : 0;
-    } catch (e) { tf.liqErr = e.message; }
+  try { const f = await jget("/funding-rate", { symbols: syms }); const v = f.map(x => x.value).filter(x => x != null); out.funding = v.length ? +(sum(v) / v.length).toFixed(4) : null; }
+  catch (e) { out.fundingErr = e.message; }
+
+  let oi = [], cvd = [], liqL = [], liqS = [];
+  try { oi = aggByT(await jget("/open-interest-history", { symbols: syms, interval: "1hour", from, to, convert_to_usd: "true" }), p => p.c); } catch (e) { out.oiErr = e.message; }
+  try { cvd = aggByT(await jget("/ohlcv-history", { symbols: syms, interval: "1hour", from, to }), p => (2 * (p.bv || 0) - (p.v || 0))); } catch (e) { out.cvdErr = e.message; }
+  try { const lq = await jget("/liquidation-history", { symbols: syms, interval: "1hour", from, to, convert_to_usd: "true" }); liqL = aggByT(lq, p => (p.l ?? p.long ?? 0)); liqS = aggByT(lq, p => (p.s ?? p.short ?? 0)); } catch (e) { out.liqErr = e.message; }
+
+  for (const key of TF_LABELS) {
+    const h = TF_HOURS[key]; const tf = {};
+    if (oi.length) { const last = oi[oi.length - 1].v; const prev = oi[Math.max(0, oi.length - 1 - h)].v; tf.oi = Math.round(last); tf.oiChg = prev ? +((last / prev - 1) * 100).toFixed(1) : null; }
+    if (cvd.length) { const net = sum(cvd.slice(-h).map(p => p.v)); tf.cvd = Math.round(net); tf.cvdDir = net > 0 ? 1 : net < 0 ? -1 : 0; }
+    if (liqL.length) { tf.liqLong = Math.round(sum(liqL.slice(-h).map(p => p.v))); tf.liqShort = Math.round(sum(liqS.slice(-h).map(p => p.v))); }
     out[key] = tf;
   }
   return out;
@@ -111,12 +88,11 @@ async function main() {
     try { result[base] = await avizorAsset(base, syms); log.ok.push(base); }
     catch (e) { log.err.push(base + ": " + e.message); }
   }
-  const payload = { updated: new Date().toISOString(), source: "Coinalyze (agregado)", tfs: TFS.map(t => t[1]), data: result };
-  writeFileSync(join(ROOT, "avizor.json"), JSON.stringify(payload));
+  writeFileSync(join(ROOT, "avizor.json"), JSON.stringify({ updated: new Date().toISOString(), source: "Coinalyze (agregado)", tfs: TF_LABELS, data: result }));
   console.log("=== avizor ===");
-  console.log("OK:", log.ok.length, log.ok.join(", "));
+  console.log("OK:", log.ok.length, "→", log.ok.join(", "));
   if (log.sinSimbolo.length) console.log("Sin símbolo en Coinalyze:", log.sinSimbolo.join(", "));
   if (log.err.length) log.err.forEach(e => console.log("  ⚠ " + e));
-  console.log("Llamadas:", calls, "· avizor.json escrito");
+  console.log("Llamadas totales:", calls, "· avizor.json escrito");
 }
 main().catch(e => { console.error("ERROR avizor:", e); process.exit(1); });
