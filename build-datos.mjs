@@ -1,27 +1,22 @@
-// ============================================================
-// Carmon Tradegar · build-datos.mjs
-// Lee datos-hoy.json y AÑADE (o actualiza) la fila de hoy en
-// ../src/app/btc_real.js y ../src/app/eth_real.js. Además fija
-// window.BambuDataDate en ../src/app/history.js.  Node 18+.
-// Uso:  node build-datos.mjs
-// ============================================================
-import { readFile, writeFile } from "node:fs/promises";
+// Carmon Tradegar · build-datos.mjs (layout PLANO)
+// Lee datos-hoy.json y añade/actualiza la fila de hoy en btc_real.js y eth_real.js,
+// y fija window.BambuDataDate en history.js.  Uso: node build-datos.mjs
+import { readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
-const APP = new URL("../src/app/", import.meta.url);
-const fp = (n) => new URL(n, APP);
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const fp = (n) => join(ROOT, n);
+const hoy = JSON.parse(readFileSync(fp("datos-hoy.json"), "utf8"));
 
-const hoy = JSON.parse(await readFile(new URL("datos-hoy.json", import.meta.url), "utf8"));
-
-async function loadReal(file, type) {
-  const src = await readFile(fp(file), "utf8");
+function loadReal(file, type) {
   const sandbox = { window: {} };
-  new Function("window", src)(sandbox.window);
-  const R = sandbox.window.BambuRealData[type];
-  return { FIELDS: R.fields, DATES: R.dates.slice(), COLS: R.cols };
+  new Function("window", readFileSync(fp(file), "utf8"))(sandbox.window);
+  const Rr = sandbox.window.BambuRealData[type];
+  return { FIELDS: Rr.fields, DATES: Rr.dates.slice(), COLS: Rr.cols };
 }
-
 function serialize(type, FIELDS, DATES, COLS, headerDate) {
-  const arr = (a) => "[" + a.map((x) => (x === null || x === undefined ? "null" : x)).join(",") + "]";
+  const arr = (a) => "[" + a.map((x) => (x == null ? "null" : x)).join(",") + "]";
   const cols = FIELDS.map((f) => `${f}:${arr(COLS[f])}`).join(",");
   const dates = "[" + DATES.map((d) => `"${d}"`).join(",") + "]";
   return `/* Carmon Tradegar · Datos reales ${type} · ${headerDate} · ${DATES.length} días · build-datos.mjs */
@@ -35,32 +30,25 @@ function serialize(type, FIELDS, DATES, COLS, headerDate) {
 })();
 `;
 }
-
 let lastIso = null;
 for (const [type, file] of [["BTC", "btc_real.js"], ["ETH", "eth_real.js"]]) {
   const day = hoy[type];
-  if (!day) { console.warn(`Sin datos para ${type}, se omite`); continue; }
-  const { FIELDS, DATES, COLS } = await loadReal(file, type);
-
+  if (!day) { console.warn(`Sin datos para ${type}`); continue; }
+  const { FIELDS, DATES, COLS } = loadReal(file, type);
   if (DATES[DATES.length - 1] === day.iso) {
     FIELDS.forEach((f) => { if (day.values[f] != null) COLS[f][COLS[f].length - 1] = day.values[f]; });
-    console.log(`${type}: fila de ${day.iso} actualizada`);
+    console.log(`${type}: fila ${day.iso} actualizada`);
   } else {
     DATES.push(day.iso);
-    FIELDS.forEach((f) => {
-      const prev = COLS[f][COLS[f].length - 1];
-      COLS[f].push(day.values[f] != null ? day.values[f] : prev); // forward-fill si falta
-    });
-    console.log(`${type}: fila de ${day.iso} añadida (${DATES.length} días)`);
+    FIELDS.forEach((f) => { const prev = COLS[f][COLS[f].length - 1]; COLS[f].push(day.values[f] != null ? day.values[f] : prev); });
+    console.log(`${type}: fila ${day.iso} añadida (${DATES.length} días)`);
   }
   lastIso = day.iso;
-  await writeFile(fp(file), serialize(type, FIELDS, DATES, COLS, day.iso));
+  writeFileSync(fp(file), serialize(type, FIELDS, DATES, COLS, day.iso));
 }
-
 if (lastIso) {
-  const hist = await readFile(fp("history.js"), "utf8");
-  const patched = hist.replace(/window\.BambuDataDate\s*=\s*"[^"]*"/, `window.BambuDataDate = "${lastIso}"`);
-  await writeFile(fp("history.js"), patched);
+  const hist = readFileSync(fp("history.js"), "utf8");
+  writeFileSync(fp("history.js"), hist.replace(/window\.BambuDataDate\s*=\s*"[^"]*"/, `window.BambuDataDate = "${lastIso}"`));
   console.log(`history.js: BambuDataDate = ${lastIso}`);
 }
 console.log("OK · datos actualizados");

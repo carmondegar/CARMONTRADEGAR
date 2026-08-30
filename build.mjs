@@ -1,48 +1,23 @@
 #!/usr/bin/env node
-/* =====================================================================
-   Carmon Tradegar · build.mjs
-   Reconstruye el index.html autocontenido a partir de:
-     - vendor/  (React, ReactDOM, Babel incrustados)
-     - src/     (código de la app: JS plano + JSX + CSS)
-   Uso:  node build.mjs
-   Salida: ./index.html  (listo para GitHub Pages)
-   ===================================================================== */
+/* Carmon Tradegar · build.mjs (layout PLANO: todo en la raíz del repo)
+   Reconstruye index.html autocontenido.  Uso: node build.mjs */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const R = (p) => readFileSync(join(ROOT, p), "utf8");
-
-// evita cierres de etiqueta dentro de <script>/<style>
 const escScript = (s) => s.replace(/<\/script/g, "<\\/script");
-const escStyle  = (s) => s.replace(/<\/style/g, "<\\/style");
+const escStyle = (s) => s.replace(/<\/style/g, "<\\/style");
 
-// --- CSS (orden del index original) ---
-const cssFiles = ["src/app/styles.css", "src/pro/stylePro.css"];
-
-// --- Librerías incrustadas (versiones fijas vendorizadas) ---
-const libs = [
-  "vendor/react.production.min.js",
-  "vendor/react-dom.production.min.js",
-  "vendor/babel.min.js",
-];
-
-// --- JS plano (orden importa) ---
-const plainJs = [
-  "src/app/data.js", "src/app/engine.js", "src/app/glossary.js",
-  "src/app/btc_real.js", "src/app/eth_real.js", "src/app/history.js",
-  "src/app/cycle.js", "src/app/extras.js", "src/app/live.js",
-];
-
-// --- JSX (type=text/babel, orden importa) ---
+const cssFiles = ["styles.css", "stylePro.css"];
+const libs = ["react.production.min.js", "react-dom.production.min.js", "babel.min.js"];
+const plainJs = ["data.js", "engine.js", "glossary.js", "btc_real.js", "eth_real.js", "history.js", "cycle.js", "extras.js", "live.js"];
 const babelJs = [
-  "src/app/tweaks-panel.jsx", "src/app/components.jsx", "src/app/charts2.jsx",
-  "src/app/sectionsCore.jsx", "src/app/sectionsMore.jsx", "src/app/sectionsHist.jsx",
-  "src/app/sectionsCycle.jsx", "src/app/sectionsBlog.jsx", "src/app/sectionsMarket.jsx",
-  "src/app/sectionsOnchainHeat.jsx", "src/app/sectionsCartera.jsx", "src/app/sectionsDecision.jsx",
-  "src/app/sectionsReport.jsx", "src/app/sectionsGuia.jsx",
-  "src/sbambu/chartsS.jsx", "src/sbambu/dcaS.jsx", "src/pro/appPro.jsx",
+  "tweaks-panel.jsx", "components.jsx", "charts2.jsx", "sectionsCore.jsx", "sectionsMore.jsx",
+  "sectionsHist.jsx", "sectionsCycle.jsx", "sectionsBlog.jsx", "sectionsMarket.jsx",
+  "sectionsOnchainHeat.jsx", "sectionsCartera.jsx", "sectionsDecision.jsx", "sectionsReport.jsx",
+  "sectionsGuia.jsx", "chartsS.jsx", "dcaS.jsx", "appPro.jsx",
 ];
 
 const head = [
@@ -54,21 +29,12 @@ const head = [
   '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">',
   ...cssFiles.map((c) => "<style>\n" + escStyle(R(c)) + "\n</style>"),
 ];
-
 const body = [
   '<div id="root"></div>',
   ...libs.map((l) => "<script>\n" + escScript(R(l)) + "\n</script>"),
   ...plainJs.map((p) => "<script>\n" + escScript(R(p)) + "\n</script>"),
   ...babelJs.map((p) => '<script type="text/babel">\n' + escScript(R(p)) + "\n</script>"),
 ];
-
-const html =
-  "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n" +
-  head.join("\n") +
-  "\n</head>\n<body>\n" +
-  body.join("\n") +
-  "\n</body>\n</html>\n";
-
+const html = '<!DOCTYPE html>\n<html lang="es">\n<head>\n' + head.join("\n") + "\n</head>\n<body>\n" + body.join("\n") + "\n</body>\n</html>\n";
 writeFileSync(join(ROOT, "index.html"), html);
-const mb = (Buffer.byteLength(html) / 1048576).toFixed(2);
-console.log(`OK · index.html reconstruido (${mb} MB)`);
+console.log(`OK · index.html reconstruido (${(Buffer.byteLength(html) / 1048576).toFixed(2)} MB)`);
