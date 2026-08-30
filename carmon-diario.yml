@@ -1,0 +1,44 @@
+name: Carmon Tradegar · datos diarios
+
+on:
+  schedule:
+    - cron: "0 13 * * *"      # 13:00 UTC cada día (ajusta si quieres)
+  workflow_dispatch: {}        # permite lanzarlo a mano desde la pestaña Actions
+
+permissions:
+  contents: write              # para poder hacer commit de los datos + index.html
+
+concurrency:
+  group: carmon-diario
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repo
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Traer datos del día (precio + técnicos + on-chain BRK)
+        working-directory: automatizacion
+        run: node fetch-datos.mjs
+
+      - name: Añadir la fila de hoy a los archivos de datos
+        working-directory: automatizacion
+        run: node build-datos.mjs
+
+      - name: Reconstruir la web (index.html autocontenido)
+        run: node build.mjs
+
+      - name: Guardar cambios (dispara el redeploy de GitHub Pages)
+        run: |
+          git config user.name  "carmon-bot"
+          git config user.email "bot@carmontradegar.local"
+          git add src/app/btc_real.js src/app/eth_real.js src/app/history.js index.html
+          git commit -m "datos: actualización automática $(date -u +%F)" || echo "sin cambios"
+          git push
