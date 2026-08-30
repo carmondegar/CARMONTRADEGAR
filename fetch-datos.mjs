@@ -41,9 +41,11 @@ async function priceToday(symbol, cgId) {
   }
 }
 const BRK_MAP = {
-  nuplSTH: "sth_nupl", nuplLTH: "lth_nupl", sthSopr: "sth_sopr", lthSopr: "lth_sopr",
-  asopr: "sopr", puell: "puell_multiple",
-  rpSTH: "sth_realized_price", rpLTH: "lth_realized_price", mvrvZ: "mvrv_zscore",
+  nuplSTH: "sth_nupl", nuplLTH: "lth_nupl",
+  sthSopr: "sth_sopr_24h", lthSopr: "lth_sopr_24h", asopr: "sopr_24h", // SOPR diario = variantes _24h
+  puell: "puell_multiple",
+  rpSTH: "sth_realized_price", rpLTH: "lth_realized_price",
+  // mvrvZ: BRK no publica MVRV Z-score → se mantiene el último valor (forward-fill)
 };
 const BRK = "https://bitview.space/api/series";
 async function brkLatest(id) {
@@ -53,12 +55,13 @@ async function brkLatest(id) {
   if (j && typeof j === "object") return Number(j.value ?? j.v ?? Object.values(j).pop());
   return null;
 }
+// CDD como oscilador = vocdd de hoy (24h) ÷ media diaria del último año.
+// Usa dos series ya calculadas por BRK (sin rangos): vocdd_sum_24h y vocdd_sum_1y.
 async function brkCdd() {
-  const j = await jget(`${BRK}/vocdd/day1?limit=365&format=json`);
-  const vals = (Array.isArray(j) ? j : (j.values || j.data || [])).map((x) => (typeof x === "number" ? x : Number(x.value ?? x.v))).filter((n) => !isNaN(n));
-  if (vals.length < 30) return null;
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-  return avg ? +(vals[vals.length - 1] / avg).toFixed(3) : null;
+  const s24 = await brkLatest("vocdd_sum_24h");
+  const s1y = await brkLatest("vocdd_sum_1y");
+  if (s24 == null || s1y == null || !s1y || isNaN(s24) || isNaN(s1y)) return null;
+  return +(s24 / (s1y / 365)).toFixed(3);
 }
 async function block(file, type, symbol, cgId, full) {
   const base = loadReal(file, type);
