@@ -21,13 +21,19 @@ const BASE = "https://api.coinalyze.net/v1";
 const ASSETS = ["BTC","ETH","BCH","SOL","AAVE","LTC","LINK","AVAX","TON","XRP","SUI","APT","XLM","ADA","ARB","HBAR","ZEC","TAO","INJ","NEAR","RENDER","DOGE","QNT","VIRTUAL","IOTA","ENA","PEPE"];
 const TFS = [["1hour","1H"], ["4hour","4H"], ["12hour","12H"], ["daily","D"]];
 
+const MAX_SYMS = 6;   // agregamos los ~6 exchanges mayores por activo (≈90% del volumen)
 let calls = 0;
-async function jget(path, params) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function jget(path, params, tries = 0) {
   const url = new URL(BASE + path);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
-  // throttling suave: 40 llamadas/min → ~1 cada 1.6s
-  calls++; if (calls > 1) await new Promise(r => setTimeout(r, 1700));
+  await sleep(2000); // ritmo base
   const r = await fetch(url, { headers: { api_key: KEY, accept: "application/json" } });
+  calls++;
+  if (r.status === 429) { // límite: esperar el reset de la ventana y reintentar
+    if (tries < 5) { await sleep(45000); return jget(path, params, tries + 1); }
+    throw new Error("429 tras reintentos en " + path);
+  }
   if (!r.ok) throw new Error("HTTP " + r.status + " en " + path);
   return r.json();
 }
@@ -59,7 +65,7 @@ function aggByT(resArr, valFn) {
 }
 
 async function avizorAsset(base, symbols) {
-  const syms = symbols.slice(0, 20).join(","); // Coinalyze admite hasta 20
+  const syms = symbols.slice(0, MAX_SYMS).join(","); // top exchanges (agregado)
   const out = {};
   // Funding actual (media entre exchanges)
   try {
