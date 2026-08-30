@@ -26,10 +26,19 @@ function loadReal(file, type) {
   const Rr = sandbox.window.BambuRealData[type];
   return { dates: Rr.dates.slice(), price: Rr.cols.price.slice() };
 }
-async function priceToday(symbol) {
-  const j = await jget(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=1`);
-  const k = j[j.length - 1];
-  return { iso: new Date(k[0]).toISOString().slice(0, 10), close: parseFloat(k[4]) };
+// Precio de hoy — resistente a geobloqueo de Binance en servidores de GitHub.
+// 1) data-api.binance.vision (datos públicos de Binance, sin geobloqueo)
+// 2) CoinGecko de respaldo.
+async function priceToday(symbol, cgId) {
+  try {
+    const j = await jget(`https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=1d&limit=1`);
+    const k = j[j.length - 1];
+    return { iso: new Date(k[0]).toISOString().slice(0, 10), close: parseFloat(k[4]) };
+  } catch (e1) {
+    const g = await jget(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
+    if (!g[cgId] || g[cgId].usd == null) throw new Error("precio no disponible (Binance y CoinGecko fallaron)");
+    return { iso: new Date().toISOString().slice(0, 10), close: g[cgId].usd };
+  }
 }
 const BRK_MAP = {
   nuplSTH: "sth_nupl", nuplLTH: "lth_nupl", sthSopr: "sth_sopr", lthSopr: "lth_sopr",
@@ -51,9 +60,9 @@ async function brkCdd() {
   const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
   return avg ? +(vals[vals.length - 1] / avg).toFixed(3) : null;
 }
-async function block(file, type, symbol, full) {
+async function block(file, type, symbol, cgId, full) {
   const base = loadReal(file, type);
-  const p = await priceToday(symbol);
+  const p = await priceToday(symbol, cgId);
   const prices = base.price.slice(), dates = base.dates.slice();
   if (dates[dates.length - 1] === p.iso) prices[prices.length - 1] = p.close;
   else { prices.push(p.close); dates.push(p.iso); }
@@ -71,8 +80,8 @@ async function block(file, type, symbol, full) {
   return { iso: p.iso, values, log };
 }
 async function main() {
-  const btc = await block("btc_real.js", "BTC", "BTCUSDT", true);
-  const eth = await block("eth_real.js", "ETH", "ETHUSDT", false);
+  const btc = await block("btc_real.js", "BTC", "BTCUSDT", "bitcoin", true);
+  const eth = await block("eth_real.js", "ETH", "ETHUSDT", "ethereum", false);
   writeFileSync(fp("datos-hoy.json"), JSON.stringify({ BTC: { iso: btc.iso, values: btc.values }, ETH: { iso: eth.iso, values: eth.values } }, null, 2));
   console.log("=== fetch-datos ===");
   console.log("BTC", btc.iso, btc.values.price, "| ETH", eth.iso, eth.values.price);
