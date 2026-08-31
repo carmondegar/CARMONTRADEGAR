@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TABLA MAGO · Escáner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#121C18; --surface:#1B2A24; --surface2:#213229; --line:#33473E;
+    --text:#ECE7D6; --muted:#9DB0A6; --gold:#EAD98A; --green:#6FBF8E; --red:#E39A9A;
+    --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+    /* paleta MAGO (de tu Pine) */
+    --cBull:#a5d6a7; --cBear:#ef9a9a; --cNeut:#fff59d; --cWarn:#ffcc80;
+    --cSqzGL:#2ef527; --cSqzGD:#10780d; --cSqzRL:#d90606; --cSqzRD:#620000;
+    --cBg:#eceff1; --cFrame:#b0bec5; --cHdr:#cfd8dc; --cLbl:#455a64; --cTxtD:#1a1a1a;
+    --cAdx1:#e3f2fd; --cAdx2:#bbdefb; --cAdx3:#90caf9; --cAdx4:#64b5f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.4}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .logo{width:38px;height:38px;border-radius:10px;background:#22402F;display:flex;align-items:center;justify-content:center}
+  .brand{font-size:22px;font-weight:700}
+  .brand .badge{font-family:var(--mono);font-size:11px;color:#1A2621;background:var(--gold);border-radius:5px;padding:2px 7px;margin-left:6px}
+  .sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:2px 0 16px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  button{font-family:var(--sans);cursor:pointer}
+  .btn{background:var(--gold);color:#1A2621;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px}
+  .btn:disabled{opacity:.5;cursor:wait}
+  .status{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .legend{font-size:12px;color:var(--muted);margin-left:auto}
+  .legend b{color:var(--green)} .legend .s{color:var(--red)} .legend .w{color:var(--gold)}
+
+  /* Escáner */
+  .row{display:grid;grid-template-columns:132px 96px 62px 116px 1fr 28px;gap:8px;align-items:center;
+       background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:7px;cursor:pointer;transition:background .12s}
+  .row:hover{background:var(--surface2)}
+  .row.canta{border-color:var(--gold)}
+  .asset{font-weight:600;font-size:14px}
+  .asset small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+  .price{font-family:var(--mono);font-size:13px;text-align:right}
+  .chg{font-family:var(--mono);font-size:12px;text-align:right}
+  .chg.up{color:var(--green)} .chg.dn{color:var(--red)}
+  .verd{font-family:var(--mono);font-size:12px;font-weight:600;text-align:center;border-radius:6px;padding:5px 4px}
+  .verd.L{background:rgba(111,191,142,.15);color:var(--green);border:1px solid #3E7A57}
+  .verd.S{background:rgba(227,154,154,.15);color:var(--red);border:1px solid #7a3b3b}
+  .verd.E{background:rgba(234,217,138,.10);color:var(--gold);border:1px solid #7a5f2e}
+  .sigmas{display:flex;gap:5px;flex-wrap:wrap}
+  .sig{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;background:#14201B;border:1px solid var(--line);color:var(--muted)}
+  .sig b{color:var(--text)}
+  .sig.pos{border-color:#3E7A57} .sig.pos b{color:var(--green)}
+  .sig.neg{border-color:#7a3b3b} .sig.neg b{color:var(--red)}
+  .chev{color:var(--muted);text-align:center}
+  .na{opacity:.45}
+
+  /* Detalle: TABLA MAGO (paleta pastel) */
+  .detail{display:none;margin:2px 0 12px;overflow-x:auto}
+  .detail.open{display:block}
+  table.mago{border-collapse:separate;border-spacing:0;background:var(--cBg);border:2px solid var(--cFrame);border-radius:8px;overflow:hidden;font-size:13px;min-width:560px}
+  table.mago th,table.mago td{padding:6px 9px;text-align:center;color:var(--cTxtD);border:1px solid var(--cFrame);white-space:pre-line}
+  table.mago th{background:var(--cHdr);color:var(--cLbl);font-family:var(--mono);font-weight:600}
+  td.tf{background:var(--cHdr);color:var(--cLbl);font-weight:600}
+  .fondo td{font-weight:600}
+  .verdrow td{font-size:15px;font-weight:700}
+  .sep td{padding:2px;background:var(--cFrame)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><svg width="22" height="22" viewBox="0 0 32 32" fill="none"><path d="M13 8v16M19 8v16" stroke="#EDE7D2" stroke-width="2.4" stroke-linecap="round"/><path d="M13 13h6M13 18h6" stroke="#EAD98A" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+    <div class="brand">TABLA MAGO<span class="badge">Escáner</span></div>
+  </header>
+  <div class="sub">Confluencia multi-TF · S · D · 4H · 1H · datos Binance (gratis)</div>
+
+  <div class="bar">
+    <button class="btn" id="scan">Escanear</button>
+    <span class="status" id="status">Pulsa «Escanear» para analizar los activos.</span>
+    <span class="legend">Veredicto: <b>LONG</b> · <span class="s">SHORT</span> · <span class="w">ESPERAR</span> · marco dorado = canta</span>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script>
+// ===== Indicadores MAGO (portados del Pine v6) =====
+const emaSeries=(s,p)=>{const k=2/(p+1);const o=new Array(s.length);let e=s[0];o[0]=e;for(let i=1;i<s.length;i++){e=s[i]*k+e*(1-k);o[i]=e;}return o;};
+const smaAt=(s,i,p)=>{if(i+1<p)return null;let x=0;for(let k=i-p+1;k<=i;k++)x+=s[k];return x/p;};
+const rmaSeries=(s,p)=>{const o=new Array(s.length).fill(null);let prev=null;for(let i=0;i<s.length;i++){const v=s[i]==null?0:s[i];if(i<p){if(i===p-1){let x=0;for(let k=0;k<p;k++)x+=(s[k]==null?0:s[k]);prev=x/p;o[i]=prev;}}else{prev=(prev*(p-1)+v)/p;o[i]=prev;}}return o;};
+const highest=(h,i,p)=>{let m=-Infinity;for(let k=i-p+1;k<=i;k++)m=Math.max(m,h[k]);return m;};
+const lowest=(l,i,p)=>{let m=Infinity;for(let k=i-p+1;k<=i;k++)m=Math.min(m,l[k]);return m;};
+function rsiLast(c,p){if(c.length<=p)return null;let g=0,l=0;for(let i=1;i<=p;i++){const d=c[i]-c[i-1];if(d>=0)g+=d;else l-=d;}let ag=g/p,al=l/p;for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1];ag=(ag*(p-1)+(d>0?d:0))/p;al=(al*(p-1)+(d<0?-d:0))/p;}return 100-100/(1+(al===0?100:ag/al));}
+function stochKLast(c,h,l,kLen,kSm){const n=c.length;const raw=new Array(n).fill(null);for(let i=kLen-1;i<n;i++){const hh=highest(h,i,kLen),ll=lowest(l,i,kLen);raw[i]=hh===ll?0:100*(c[i]-ll)/(hh-ll);}let s=0,cnt=0;for(let i=n-kSm;i<n;i++){if(raw[i]==null)return null;s+=raw[i];cnt++;}return cnt?s/cnt:null;}
+const linregAt=(s,e,len)=>{let sx=0,sy=0,sxy=0,sx2=0;for(let j=0;j<len;j++){const x=j,y=s[e-len+1+j];sx+=x;sy+=y;sxy+=x*y;sx2+=x*x;}const den=len*sx2-sx*sx;if(den===0)return s[e];const sl=(len*sxy-sx*sy)/den;const it=(sy-sl*sx)/len;return it+sl*(len-1);};
+function squeezeState(c,h,l,mL){const n=c.length;const val=new Array(n).fill(null);for(let i=mL-1;i<n;i++){const hh=highest(h,i,mL),ll=lowest(l,i,mL),sm=smaAt(c,i,mL);val[i]=c[i]-((hh+ll)/2+sm)/2;}const mom=linregAt(val,n-1,mL);const mp=linregAt(val,n-2,mL);const up=mom>0,ri=mom>mp;return up?(ri?2:1):(ri?-1:-2);}
+function adxLast(h,l,c,len){const n=c.length;const tr=new Array(n).fill(0),pdm=new Array(n).fill(0),mdm=new Array(n).fill(0);for(let i=1;i<n;i++){const up=h[i]-h[i-1],dn=l[i-1]-l[i];pdm[i]=(up>dn&&up>0)?up:0;mdm[i]=(dn>up&&dn>0)?dn:0;tr[i]=Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1]));}const tru=rmaSeries(tr,len),pR=rmaSeries(pdm,len),mR=rmaSeries(mdm,len);const dx=new Array(n).fill(0);for(let i=0;i<n;i++){if(tru[i]==null||tru[i]===0)continue;const pdi=100*pR[i]/tru[i],mdi=100*mR[i]/tru[i];const sm=pdi+mdi;dx[i]=sm===0?0:100*Math.abs(pdi-mdi)/sm;}const as=rmaSeries(dx,len);const a=as[n-1],ap=as[n-2];return{adx:a==null?0:a,rising:(a!=null&&ap!=null)?a>ap:true};}
+function obvDirLast(c,v,mL){const n=c.length;let obv=0;const s=new Array(n);s[0]=0;for(let i=1;i<n;i++){obv+=Math.sign(c[i]-c[i-1])*v[i];s[i]=obv;}const ma=smaAt(s,n-1,mL);return ma==null?0:(s[n-1]>ma?1:-1);}
+function mfiLast(h,l,c,v,len){const n=c.length;let pos=0,neg=0;const tp=i=>(h[i]+l[i]+c[i])/3;for(let i=n-len;i<n;i++){if(i<=0)continue;const mf=tp(i)*v[i];if(tp(i)>tp(i-1))pos+=mf;else if(tp(i)<tp(i-1))neg+=mf;}if(pos+neg===0)return 50;return 100-100/(1+pos/(neg||1e-9));}
+const CFG={emaLen:50,rsiLen:14,rsiOB:70,rsiOS:30,rsiExtOB:80,rsiExtOS:20,kLen:14,kSmooth:3,stochOB:80,stochOS:20,momLen:20,adxLen:14,volType:"OBV",volMaLen:20,mfiLen:14,mfiOB:60,mfiOS:40};
+const OPTS={useDaily:true,showH1:true,thrConf:6};
+function magoTF(k){const{o,h,l,c,v}=k;const ema=emaSeries(c,CFG.emaLen);const emaDir=c[c.length-1]>ema[ema.length-1]?1:-1;const kk=stochKLast(c,h,l,CFG.kLen,CFG.kSmooth);const stochDir=kk==null?0:(kk>=CFG.stochOB?1:kk<=CFG.stochOS?-1:0);const r=rsiLast(c,CFG.rsiLen);const rsiDir=r==null?0:(r<=CFG.rsiOS?1:r>=CFG.rsiOB?-1:0);const rsiExt=r!=null&&(r>=CFG.rsiExtOB||r<=CFG.rsiExtOS);const momState=squeezeState(c,h,l,CFG.momLen);const{adx,rising}=adxLast(h,l,c,CFG.adxLen);let volDir;if(CFG.volType==="MFI"){const m=mfiLast(h,l,c,v,CFG.mfiLen);volDir=m>=CFG.mfiOB?1:m<=CFG.mfiOS?-1:0;}else volDir=obvDirLast(c,v,CFG.volMaLen);return{emaDir,momState,adx,adxRising:rising,rsiDir,rsiExt,volDir,stochDir,rsi:r,stochK:kk};}
+const sqzScore=m=>m===2?1:m===-2?-1:0;
+const tfSum=t=>t.emaDir+sqzScore(t.momState)+t.rsiDir+t.volDir+t.stochDir;
+function countDir(t,dir){const arr=[t.emaDir,sqzScore(t.momState),t.rsiDir,t.volDir,t.stochDir];let f=0,c=0;for(const v of arr){if(dir!==0&&v===dir)f++;else if(dir!==0&&v===-dir)c++;}return{favor:f,contra:c};}
+function veredicto(tfs){const sums={W:tfSum(tfs.W),D:tfSum(tfs.D),H4:tfSum(tfs.H4),H1:tfs.H1?tfSum(tfs.H1):0};const fondo=OPTS.useDaily?(sums.W+sums.D):sums.W;const dir=fondo>0?1:fondo<0?-1:0;const cW=countDir(tfs.W,dir),cD=countDir(tfs.D,dir),c4=countDir(tfs.H4,dir),c1=tfs.H1?countDir(tfs.H1,dir):{favor:0,contra:0};const totalFavor=cW.favor+(OPTS.useDaily?cD.favor:0)+c4.favor+(OPTS.showH1?c1.favor:0);const h4A=c4.contra>c4.favor&&dir!==0;const h1A=OPTS.showH1&&tfs.H1&&c1.contra>c1.favor&&dir!==0;const estado=(dir!==0&&totalFavor>=OPTS.thrConf)?dir:0;return{sums,fondo,dirFondo:dir,totalFavor,h4Against:h4A,h1Against:h1A,estado};}
+
+// ===== Activos (cripto · Binance USDT). Edita la lista a tu gusto. =====
+const ASSETS=[
+ ["BTCUSDT","BTC"],["ETHUSDT","ETH"],["BCHUSDT","BCH"],["SOLUSDT","SOL"],["AAVEUSDT","AAVE"],
+ ["LTCUSDT","LTC"],["LINKUSDT","LINK"],["AVAXUSDT","AVAX"],["TONUSDT","TON"],["XRPUSDT","XRP"],
+ ["SUIUSDT","SUI"],["APTUSDT","APT"],["XLMUSDT","XLM"],["ADAUSDT","ADA"],["ARBUSDT","ARB"],
+ ["HBARUSDT","HBAR"],["ZECUSDT","ZEC"],["TAOUSDT","TAO"],["INJUSDT","INJ"],["NEARUSDT","NEAR"],
+ ["RENDERUSDT","RENDER"],["DOGEUSDT","DOGE"],["QNTUSDT","QNT"],["VIRTUALUSDT","VIRTUAL"],
+ ["IOTAUSDT","IOTA"],["ENAUSDT","ENA"],["PEPEUSDT","PEPE"]
+];
+const TFS=[["1w","W"],["1d","D"],["4h","H4"],["1h","H1"]];
+const BASE="https://data-api.binance.vision/api/v3/klines";
+
+async function klines(sym,itv){
+  const r=await fetch(`${BASE}?symbol=${sym}&interval=${itv}&limit=210`);
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  const o=[],h=[],l=[],c=[],v=[];
+  for(const k of j){o.push(+k[1]);h.push(+k[2]);l.push(+k[3]);c.push(+k[4]);v.push(+k[5]);}
+  return {o,h,l,c,v};
+}
+async function analyze(sym){
+  const tfs={};
+  for(const[itv,key]of TFS){ tfs[key]=magoTF(await klines(sym,itv)); }
+  const ver=veredicto(tfs);
+  // precio y %24h desde 1h
+  const kh=await klines(sym,"1h");
+  const price=kh.c[kh.c.length-1];
+  const p24=kh.c.length>25?kh.c[kh.c.length-25]:kh.c[0];
+  const chg=(price/p24-1)*100;
+  return {tfs,ver,price,chg};
+}
+
+// ===== Render =====
+const dir3=v=>v===1?"Alcista":v===-1?"Bajista":"Neutro";
+const colDir=v=>v===1?"var(--cBull)":v===-1?"var(--cBear)":"var(--cNeut)";
+const sqzTxt=m=>m===2?"Alcista":m===1?"Alcista ¿Giro?":m===-1?"Bajista ¿Giro?":"Bajista";
+const sqzCol=m=>m===2?"var(--cSqzGL)":m===1?"var(--cSqzGD)":m===-1?"var(--cSqzRD)":"var(--cSqzRL)";
+const sqzTxtCol=m=>(m===1||m===-1||m===-2)?"#fff":"var(--cTxtD)";
+const adxLvl=a=>a<25?"débil":a<50?"fuerte":a<75?"muy fuerte":"extremo";
+const adxCol=a=>a<25?"var(--cAdx1)":a<50?"var(--cAdx2)":a<75?"var(--cAdx3)":"var(--cAdx4)";
+const sumTxt=s=>s>0?"▲"+s:s<0?"▼"+Math.abs(s):"—";
+const fmt=p=>p>=100?p.toLocaleString("es-ES",{maximumFractionDigits:2}):p>=1?p.toFixed(3):p.toPrecision(4);
+
+function tfRow(lbl,t){
+  const s=tfSum(t);
+  return `<tr>
+   <td class="tf">${lbl}</td>
+   <td style="background:${colDir(Math.sign(s))}">${sumTxt(s)}</td>
+   <td style="background:${colDir(t.emaDir)}">${dir3(t.emaDir)}</td>
+   <td style="background:${sqzCol(t.momState)};color:${sqzTxtCol(t.momState)}">${sqzTxt(t.momState)}</td>
+   <td style="background:${adxCol(t.adx)}">${Math.round(t.adx)} ${t.adxRising?"↗":"↘"}\n${adxLvl(t.adx)}</td>
+   <td style="background:${colDir(t.rsiDir)}">${dir3(t.rsiDir)}${t.rsiExt?" *":""}</td>
+   <td style="background:${colDir(t.volDir)}">${dir3(t.volDir)}</td>
+   <td style="background:${colDir(t.stochDir)}">${dir3(t.stochDir)}</td>
+  </tr>`;
+}
+function detailTable(d){
+  const{tfs,ver}=d;
+  const fondoTxt=ver.dirFondo===1?"FONDO: Alcista":ver.dirFondo===-1?"FONDO: Bajista":"FONDO: Sin dirección";
+  const estTxt=ver.estado===1?"▲ LONG":ver.estado===-1?"▼ SHORT":"■ ESPERAR";
+  const estCol=ver.estado===1?"var(--cBull)":ver.estado===-1?"var(--cBear)":"var(--cNeut)";
+  const aviso=(ver.h4Against||ver.h1Against)?("⚠ "+(ver.h4Against?"4H ":"")+(ver.h1Against?"1H":"")+" contra"):(ver.totalFavor+" a favor");
+  const avisoCol=(ver.h4Against||ver.h1Against)?"var(--cWarn)":"var(--cHdr)";
+  return `<table class="mago">
+   <tr><th>TF</th><th>Σ</th><th>EMA50</th><th>SQZ</th><th>ADX</th><th>RSI</th><th>${CFG.volType}</th><th>ESTO</th></tr>
+   ${tfRow("S",tfs.W)}${tfRow("D",tfs.D)}${tfRow("4H",tfs.H4)}${tfRow("1H",tfs.H1)}
+   <tr class="fondo"><td class="tf">S+D</td><td colspan="7" style="background:${colDir(ver.dirFondo)}">${fondoTxt}</td></tr>
+   <tr class="sep"><td colspan="8"></td></tr>
+   <tr class="verdrow"><td colspan="5" style="background:${estCol}">${estTxt}</td><td colspan="3" style="background:${avisoCol}">${aviso}</td></tr>
+  </table>`;
+}
+function scanRow(name,sym,d,idx){
+  const{ver,price,chg}=d;
+  const vClass=ver.estado===1?"L":ver.estado===-1?"S":"E";
+  const vTxt=ver.estado===1?"LONG":ver.estado===-1?"SHORT":"ESPERAR";
+  const sigs=[["S",ver.sums.W],["D",ver.sums.D],["4H",ver.sums.H4],["1H",ver.sums.H1]]
+    .map(([l,s])=>`<span class="sig ${s>0?'pos':s<0?'neg':''}">${l} <b>${sumTxt(s)}</b></span>`).join("");
+  return `<div class="row ${ver.estado!==0?'canta':''}" onclick="toggle(${idx})">
+    <div class="asset">${name}<small>${sym}</small></div>
+    <div class="price">$${fmt(price)}</div>
+    <div class="chg ${chg>=0?'up':'dn'}">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
+    <div class="verd ${vClass}">${vTxt}<br>${ver.totalFavor} a favor</div>
+    <div class="sigmas">${sigs}</div>
+    <div class="chev">▾</div>
+  </div>
+  <div class="detail" id="d${idx}">${detailTable(d)}</div>`;
+}
+window.toggle=i=>{const el=document.getElementById("d"+i);if(el)el.classList.toggle("open");};
+
+const $=id=>document.getElementById(id);
+async function run(){
+  const btn=$("scan");btn.disabled=true;
+  const list=$("list");list.innerHTML="";
+  const results=[];let done=0,fail=[];
+  for(const[sym,name]of ASSETS){
+    $("status").textContent=`Analizando ${name}… (${done+1}/${ASSETS.length})`;
+    try{ const d=await analyze(sym); results.push({sym,name,d}); }
+    catch(e){ fail.push(name); }
+    done++;
+  }
+  // BTC siempre 1º, ETH siempre 2º; el resto por confluencias (los que cantan arriba)
+  const rank=r=>(r.d.ver.estado!==0?100:0)+r.d.ver.totalFavor;
+  const pin=r=>r.sym==="BTCUSDT"?2:r.sym==="ETHUSDT"?1:0;
+  results.sort((a,b)=>{const pd=pin(b)-pin(a);return pd?pd:rank(b)-rank(a);});
+  list.innerHTML=results.map((r,i)=>scanRow(r.name,r.sym,r.d,i)).join("");
+  $("status").innerHTML=`Listo · ${results.length} activos`+(fail.length?` · no disponibles: ${fail.join(", ")}`:"")+` · <span style="color:var(--muted)">actualizado ${new Date().toLocaleTimeString("es-ES")}</span>`;
+  btn.disabled=false;
+}
+$("scan").addEventListener("click",run);
+</script>
+</body>
+</html>
