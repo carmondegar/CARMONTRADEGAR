@@ -76,8 +76,8 @@
   <div class="sub">Confluencia multi-TF · S · D · 4H · 1H · datos Binance (gratis)</div>
 
   <div class="bar">
-    <button class="btn" id="scan">Escanear</button>
-    <span class="status" id="status">Pulsa «Escanear» para analizar los activos.</span>
+    <button class="btn" id="scan">Escanear ahora</button>
+    <span class="status" id="status">Cargando… se actualiza solo cada hora.</span>
     <span class="legend">Veredicto: <b>LONG</b> · <span class="s">SHORT</span> · <span class="w">ESPERAR</span> · marco dorado = canta</span>
   </div>
 
@@ -196,7 +196,13 @@ function scanRow(name,sym,d,idx){
 window.toggle=i=>{const el=document.getElementById("d"+i);if(el)el.classList.toggle("open");};
 
 const $=id=>document.getElementById(id);
+let busy=false, autoTimer=null;
+// Próxima actualización automática: minuto :01 de la siguiente hora (cuando cierra la vela de 1H).
+function nextTick(){const now=new Date();const n=new Date(now);n.setHours(now.getHours()+1,1,0,0);return n;}
+function scheduleAuto(){ if(autoTimer)clearTimeout(autoTimer); const n=nextTick(); autoTimer=setTimeout(run, n-new Date()); return n; }
 async function run(){
+  if(busy)return;                       // evita solapes: auto y manual conviven sin pisarse
+  busy=true;
   const btn=$("scan");btn.disabled=true;
   const list=$("list");list.innerHTML="";
   const results=[];let done=0,fail=[];
@@ -211,10 +217,13 @@ async function run(){
   const pin=r=>r.sym==="BTCUSDT"?2:r.sym==="ETHUSDT"?1:0;
   results.sort((a,b)=>{const pd=pin(b)-pin(a);return pd?pd:rank(b)-rank(a);});
   list.innerHTML=results.map((r,i)=>scanRow(r.name,r.sym,r.d,i)).join("");
-  $("status").innerHTML=`Listo · ${results.length} activos`+(fail.length?` · no disponibles: ${fail.join(", ")}`:"")+` · <span style="color:var(--muted)">actualizado ${new Date().toLocaleTimeString("es-ES")}</span>`;
-  btn.disabled=false;
+  const n=scheduleAuto();
+  const hhmm=d=>d.toLocaleTimeString("es-ES",{hour:'2-digit',minute:'2-digit'});
+  $("status").innerHTML=`Listo · ${results.length} activos`+(fail.length?` · no disponibles: ${fail.join(", ")}`:"")+` · <span style="color:var(--muted)">actualizado ${new Date().toLocaleTimeString("es-ES")} · auto ${hhmm(n)}</span>`;
+  btn.disabled=false; busy=false;
 }
-$("scan").addEventListener("click",run);
+$("scan").addEventListener("click",run);   // MANUAL: refresca cuando quieras
+run();                                       // AUTOMÁTICO: se analiza solo al abrir y cada hora
 </script>
 </body>
 </html>
