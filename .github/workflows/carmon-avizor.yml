@@ -29,5 +29,6 @@ jobs:
           git config user.name  "carmon-bot"
           git config user.email "bot@carmontradegar.local"
           git add avizor.json
-          git commit -m "avizor: actualización $(date -u +%FT%TZ)" || echo "sin cambios"
+          git commit -m "avizor: actualización $(date -u +%FT%TZ)" || { echo "sin cambios"; exit 0; }
+          git pull --rebase origin main || true
           git push
