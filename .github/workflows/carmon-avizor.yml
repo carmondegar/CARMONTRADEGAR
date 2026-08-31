@@ -2,11 +2,15 @@ name: Carmon Tradegar · avizor (Coinalyze)
 
 on:
   schedule:
-    - cron: "0 * * * *"
-  workflow_dispatch: {}
+    - cron: "11 * * * *"   # cada hora, minuto :11 (fuera del pico del minuto 0 → menos saltos)
+  workflow_dispatch: {}     # botón "Run workflow" para lanzarlo a mano
 
 permissions:
   contents: write
+
+concurrency:
+  group: carmon-avizor
+  cancel-in-progress: false
 
 jobs:
   avizor:
