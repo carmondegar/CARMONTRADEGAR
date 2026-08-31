@@ -142,6 +142,8 @@ async function loadAvizor(){
   for(const u of urls){ try{ const r=await fetch(u); if(r.ok){ AVIZOR=await r.json(); return; } }catch(e){ /* probamos la siguiente */ } }
 }
 const avzUsd=n=>{const a=Math.abs(n||0);const s=(n||0)<0?"-":"";if(a>=1e9)return s+"$"+(a/1e9).toFixed(1)+"B";if(a>=1e6)return s+"$"+(a/1e6).toFixed(2)+"M";if(a>=1e3)return s+"$"+(a/1e3).toFixed(0)+"K";return s+"$"+Math.round(a);};
+// como avzUsd pero SIN "$" (para CVD, que va en unidades nativas de Coinalyze)
+const avzNum=n=>{const a=Math.abs(n||0);const s=(n||0)<0?"-":"";if(a>=1e9)return s+(a/1e9).toFixed(2)+"B";if(a>=1e6)return s+(a/1e6).toFixed(2)+"M";if(a>=1e3)return s+(a/1e3).toFixed(2)+"K";return s+Math.round(a);};
 const avzPct=n=>((n>=0?"+":"")+n+"%");
 const avzArr=d=>d>0?"▲":d<0?"▼":"—";
 const avzCls=d=>d>0?"up2":d<0?"dn2":"nt2";
@@ -150,7 +152,8 @@ function avizorBlock(sym){
   if(!AVIZOR||!AVIZOR.data||!AVIZOR.data[base])
     return `<div class="avz"><h4>Avizor · <span class="tag">Coinalyze</span></h4><div class="none">Sin datos de derivados para ${base} todavía.</div></div>`;
   const a=AVIZOR.data[base]; const tfs=AVIZOR.tfs||["1H","4H","12H","D"];
-  const cvdCell=v=>v==null?`<td class="nt2">—</td>`:`<td class="${avzCls(v)}">${avzArr(Math.sign(v))} ${avzUsd(Math.abs(v))}</td>`;
+  const cvdCell=v=>v==null?`<td class="nt2">—</td>`:`<td class="${avzCls(v)}">${avzArr(Math.sign(v))} ${avzNum(Math.abs(v))}</td>`;
+  const totSpan=v=>v==null?`<span class="nt2">—</span>`:`<span class="${avzCls(v)}">${avzArr(Math.sign(v))} ${avzNum(Math.abs(v))}</span>`;
   // Liquidaciones netas = long − short. >0 (más longs liquidados) = bajista ▼ rojo; <0 (más shorts) = alcista ▲ verde.
   const liqCell=t=>{ if(t.liqLong==null&&t.liqShort==null) return `<td class="nt2">—</td>`;
     const net=(t.liqLong||0)-(t.liqShort||0); const c=net>0?"dn2":net<0?"up2":"nt2"; const ar=net>0?"▼":net<0?"▲":"—";
@@ -168,6 +171,7 @@ function avizorBlock(sym){
   const stamp=AVIZOR.updated?`actualizado ${new Date(AVIZOR.updated).toLocaleString("es-ES")}`:"";
   return `<div class="avz"><h4>Avizor · <span class="tag">Coinalyze (agregado)</span></h4>`+
     `<div class="fund">Precio ref. <b>${px}</b> · Funding actual <b class="${fundCls}">${a.funding==null?"—":a.funding+"%"}</b> · OI actual <b>${a.oi==null?"—":avzUsd(a.oi)}</b></div>`+
+    `<div class="fund">CVD total · Spot <b>${totSpan(a.cvdTotSpot)}</b> · Fut.coin <b>${totSpan(a.cvdTotCoin)}</b> · Fut.stable <b>${totSpan(a.cvdTotStable)}</b></div>`+
     `<table class="avzt"><tr><th>TF</th><th>OI</th><th>%Δ OI</th><th>Funding</th><th>CVD Spot</th><th>CVD Fut.coin</th><th>CVD Fut.stable</th><th>Liq L−S</th></tr>${rows}</table>`+
     `<div class="stamp">${stamp} · Liq L−S: ▲ verde = shorts liquidados (alcista) · ▼ rojo = longs liquidados (bajista)</div></div>`;
 }

@@ -24,7 +24,7 @@ const BASE = "https://api.coinalyze.net/v1";
 const ASSETS = ["BTC","ETH","BCH","SOL","AAVE","LTC","LINK","AVAX","TON","XRP","SUI","APT","XLM","ADA","ARB","HBAR","ZEC","TAO","INJ","NEAR","RENDER","DOGE","QNT","VIRTUAL","IOTA","ENA","PEPE"];
 const TF_LABELS = ["1H","4H","12H","D"];
 const TF_HOURS = { "1H":1, "4H":4, "12H":12, "D":24 };
-const MAX_SYMS = 6;                 // nº de mercados mayores que agregamos por grupo
+const MAX_SYMS = 20;                // nº de mercados que agregamos por grupo (tope de Coinalyze por llamada) → OI/CVD más cercanos al agregado real
 const STABLES = new Set(["USDT","USDC","BUSD","USDE","FDUSD","DAI"]);
 
 let calls = 0;
@@ -121,30 +121,33 @@ async function avizorAsset(base, grp) {
   let liqL = [], liqS = [];
   try { const lq = await jget("/liquidation-history", { symbols: perpSyms, interval: "1hour", from, to, convert_to_usd: "true" }); liqL = aggByT(lq, p => (p.l ?? p.long ?? 0)); liqS = aggByT(lq, p => (p.s ?? p.short ?? 0)); } catch (e) { out.liqErr = e.message; }
 
-  // CVD por grupo (spot / coin / stable) + precio de referencia
-  // net = Σ(2·bv − v). Volumen lineal (spot y stablecoin) va en unidad base → ×precio = USD.
-  // Volumen inverso (coin-margin) ya viene en USD → sin escalar.
+  // CVD por grupo (spot / coin / stable) en UNIDADES NATIVAS de Coinalyze (sin convertir a $),
+  // para que cuadre con tus paneles (Spot ~K, Coin ~M, Stable ~K). net = Σ(2·bv − v).
+  // Guardamos la serie completa → total acumulado (nivel actual de la línea) + variaciones por TF.
   let price = null;
-  const cvd = { spot: null, coin: null, stable: null };
-  for (const [gk, scaleByPrice, list] of [["spot", true, grp.spot], ["coin", false, grp.coin], ["stable", true, grp.stable]]) {
+  const cvdSer = { spot: null, coin: null, stable: null };
+  for (const [gk, list] of [["spot", grp.spot], ["coin", grp.coin], ["stable", grp.stable]]) {
     if (!list || !list.length) continue;
     try {
       const raw = await ohlcv(list);
-      cvd[gk] = { series: aggByT(raw, p => (2 * (p.bv || 0) - (p.v || 0))), scale: scaleByPrice };
+      cvdSer[gk] = aggByT(raw, p => (2 * (p.bv || 0) - (p.v || 0)));
       const px = lastCloseAvg(raw);
-      if (px != null && (gk === "stable" || price == null)) price = px;   // preferimos el precio del perp lineal
+      if (px != null && (gk === "stable" || price == null)) price = px;   // precio de referencia del perp lineal
     } catch (e) { out["cvd_" + gk + "Err"] = e.message; }
   }
   out.price = price != null ? +price.toPrecision(8) : null;
+  // Totales acumulados (el número que ves a la derecha de la línea CVD en tu Coinalyze)
+  out.cvdTotSpot   = cvdSer.spot   ? Math.round(sum(cvdSer.spot.map(p => p.v)))   : null;
+  out.cvdTotCoin   = cvdSer.coin   ? Math.round(sum(cvdSer.coin.map(p => p.v)))   : null;
+  out.cvdTotStable = cvdSer.stable ? Math.round(sum(cvdSer.stable.map(p => p.v))) : null;
 
   for (const key of TF_LABELS) {
     const h = TF_HOURS[key]; const tf = {};
     if (oi.length) { const last = oi[oi.length - 1].v, prev = oi[Math.max(0, oi.length - 1 - h)].v; tf.oi = Math.round(last); tf.oiChg = prev ? +((last / prev - 1) * 100).toFixed(1) : null; }
     if (fundSer.length) { const w = fundSer.slice(-h).map(p => p.v); tf.funding = w.length ? +(sum(w) / w.length).toFixed(4) : null; }
     for (const gk of ["spot", "coin", "stable"]) {
-      const g = cvd[gk];
-      if (g && g.series.length) { let net = sum(g.series.slice(-h).map(p => p.v)); if (g.scale && price) net *= price; tf["cvd" + gk[0].toUpperCase() + gk.slice(1)] = Math.round(net); }
-      else tf["cvd" + gk[0].toUpperCase() + gk.slice(1)] = null;
+      const ser = cvdSer[gk];
+      tf["cvd" + gk[0].toUpperCase() + gk.slice(1)] = (ser && ser.length) ? Math.round(sum(ser.slice(-h).map(p => p.v))) : null;
     }
     if (liqL.length) { tf.liqLong = Math.round(sum(liqL.slice(-h).map(p => p.v))); tf.liqShort = Math.round(sum(liqS.slice(-h).map(p => p.v))); }
     out[key] = tf;
