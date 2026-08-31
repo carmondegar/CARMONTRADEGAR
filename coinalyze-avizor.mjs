@@ -32,12 +32,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function jget(path, params, tries = 0) {
   const url = new URL(BASE + path);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
-  await sleep(1800);
+  await sleep(2200);                     // ritmo suave: ~27 req/min, por debajo del límite gratis
   const r = await fetch(url, { headers: { api_key: KEY, accept: "application/json" } });
   calls++;
-  if (r.status === 429) { if (tries < 5) { await sleep(45000); return jget(path, params, tries + 1); } throw new Error("429 tras reintentos en " + path); }
+  if (r.status === 429) { if (tries < 4) { await sleep(30000); return jget(path, params, tries + 1); } throw new Error("429 tras reintentos en " + path); }
   if (!r.ok) throw new Error("HTTP " + r.status + " en " + path);
   return r.json();
+}
+
+// Reintento extra para llamadas críticas (mercados): ante error no-429 puntual, reintenta unas veces.
+async function jgetRetry(path, params, n = 3) {
+  for (let i = 0; i < n; i++) { try { return await jget(path, params); } catch (e) { if (i === n - 1) throw e; await sleep(4000); } }
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -66,7 +71,8 @@ function lastCloseAvg(resArr) {
 async function buildGroups() {
   const g = {};
   const ensure = b => (g[b] ||= { spot: [], coin: [], stable: [], perps: [] });
-  const fut = await jget("/future-markets");
+  const fut = await jgetRetry("/future-markets");
+  if (!Array.isArray(fut)) throw new Error("/future-markets no devolvió una lista");
   for (const m of fut) {
     const base = (m.base_asset || "").toUpperCase(); if (!ASSETS.includes(base)) continue;
     if (!m.is_perpetual) continue;                    // solo perpetuos
@@ -76,7 +82,7 @@ async function buildGroups() {
     else if (STABLES.has(q)) grp.stable.push(m.symbol); // lineal = stablecoin-margin
   }
   try {
-    const spot = await jget("/spot-markets");
+    const spot = await jgetRetry("/spot-markets");
     for (const m of spot) {
       const base = (m.base_asset || "").toUpperCase(); if (!ASSETS.includes(base)) continue;
       const q = (m.quote_asset || "").toUpperCase();
@@ -147,7 +153,10 @@ async function avizorAsset(base, grp) {
 }
 
 async function main() {
-  const groups = await buildGroups();
+  let groups;
+  try { groups = await buildGroups(); }
+  catch (e) { console.error("No se pudieron cargar los mercados (" + e.message + "). Se mantiene el avizor.json anterior."); process.exit(0); }
+
   const result = {}; const log = { ok: [], sinSimbolo: [], err: [] };
   for (const base of ASSETS) {
     const grp = groups[base];
@@ -155,14 +164,20 @@ async function main() {
     try { result[base] = await avizorAsset(base, grp); log.ok.push(base); }
     catch (e) { log.err.push(base + ": " + e.message); }
   }
-  writeFileSync(join(ROOT, "avizor.json"), JSON.stringify({ updated: new Date().toISOString(), source: "Coinalyze (agregado)", tfs: TF_LABELS, data: result }));
+
   console.log("=== avizor v4 ===");
   console.log("OK:", log.ok.length, "→", log.ok.join(", "));
   if (log.sinSimbolo.length) console.log("Sin símbolo:", log.sinSimbolo.join(", "));
   if (log.err.length) log.err.forEach(e => console.log("  ⚠ " + e));
-  // muestra de campos por si algún grupo viene vacío
   const b = result.BTC || {};
   console.log("BTC precio", b.price, "funding", b.funding, "oi", b.oi, "| 4H:", JSON.stringify(b["4H"] || {}));
-  console.log("Llamadas totales:", calls, "· avizor.json escrito");
+  console.log("Llamadas totales:", calls);
+
+  // Guarda solo si la corrida vino sana; si no, conserva el avizor.json anterior (no pisa datos buenos con huecos).
+  const sane = log.ok.length >= 15 && (b.oi != null || b.price != null);
+  if (!sane) { console.error("Datos insuficientes (ok=" + log.ok.length + "). NO se sobrescribe avizor.json."); process.exit(0); }
+  writeFileSync(join(ROOT, "avizor.json"), JSON.stringify({ updated: new Date().toISOString(), source: "Coinalyze (agregado)", tfs: TF_LABELS, data: result }));
+  console.log("avizor.json escrito ✅");
 }
-main().catch(e => { console.error("ERROR avizor:", e); process.exit(1); });
+// Nunca tumbamos el workflow por un fallo de datos: registramos y salimos en verde (se mantiene el último bueno).
+main().catch(e => { console.error("ERROR avizor (no fatal):", e); process.exit(0); });

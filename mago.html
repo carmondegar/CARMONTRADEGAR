@@ -65,6 +65,20 @@
   .fondo td{font-weight:600}
   .verdrow td{font-size:15px;font-weight:700}
   .sep td{padding:2px;background:var(--cFrame)}
+
+  /* Bloque AVIZOR (derivados Coinalyze) debajo de la tabla MAGO */
+  .avz{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px;min-width:720px}
+  .avz h4{margin:0 0 8px;font-size:12px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .avz h4 .tag{color:var(--gold)}
+  .avz .fund{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:8px}
+  .avz .fund b{color:var(--gold)}
+  table.avzt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  table.avzt th,table.avzt td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.avzt th{color:var(--muted);font-weight:600}
+  table.avzt td:first-child,table.avzt th:first-child{text-align:left;color:var(--text);font-weight:600}
+  .avz .up2{color:var(--green)} .avz .dn2{color:var(--red)} .avz .nt2{color:var(--muted)}
+  .avz .none{font-size:12px;color:var(--muted)}
+  .avz .stamp{font-size:10px;color:var(--muted);margin-top:7px;font-family:var(--mono)}
 </style>
 </head>
 <body>
@@ -117,6 +131,46 @@ const ASSETS=[
 ];
 const TFS=[["1w","W"],["1d","D"],["4h","H4"],["1h","H1"]];
 const BASE="https://data-api.binance.vision/api/v3/klines";
+
+// ===== AVIZOR: derivados agregados (Coinalyze) desde avizor.json del mismo repo =====
+let AVIZOR=null;
+// Intenta la ruta local (tu sitio publicado) y, si falla, el avizor.json del repo por URL absoluta
+// (raw.githubusercontent permite CORS). Así funciona tanto en GitHub Pages como abriendo el archivo suelto.
+async function loadAvizor(){
+  const urls=["avizor.json?cb="+Date.now(),
+              "https://raw.githubusercontent.com/carmondegar/CARMONTRADEGAR/main/avizor.json?cb="+Date.now()];
+  for(const u of urls){ try{ const r=await fetch(u); if(r.ok){ AVIZOR=await r.json(); return; } }catch(e){ /* probamos la siguiente */ } }
+}
+const avzUsd=n=>{const a=Math.abs(n||0);const s=(n||0)<0?"-":"";if(a>=1e9)return s+"$"+(a/1e9).toFixed(1)+"B";if(a>=1e6)return s+"$"+(a/1e6).toFixed(2)+"M";if(a>=1e3)return s+"$"+(a/1e3).toFixed(0)+"K";return s+"$"+Math.round(a);};
+const avzPct=n=>((n>=0?"+":"")+n+"%");
+const avzArr=d=>d>0?"▲":d<0?"▼":"—";
+const avzCls=d=>d>0?"up2":d<0?"dn2":"nt2";
+function avizorBlock(sym){
+  const base=sym.replace("USDT","");
+  if(!AVIZOR||!AVIZOR.data||!AVIZOR.data[base])
+    return `<div class="avz"><h4>Avizor · <span class="tag">Coinalyze</span></h4><div class="none">Sin datos de derivados para ${base} todavía.</div></div>`;
+  const a=AVIZOR.data[base]; const tfs=AVIZOR.tfs||["1H","4H","12H","D"];
+  const cvdCell=v=>v==null?`<td class="nt2">—</td>`:`<td class="${avzCls(v)}">${avzArr(Math.sign(v))} ${avzUsd(Math.abs(v))}</td>`;
+  // Liquidaciones netas = long − short. >0 (más longs liquidados) = bajista ▼ rojo; <0 (más shorts) = alcista ▲ verde.
+  const liqCell=t=>{ if(t.liqLong==null&&t.liqShort==null) return `<td class="nt2">—</td>`;
+    const net=(t.liqLong||0)-(t.liqShort||0); const c=net>0?"dn2":net<0?"up2":"nt2"; const ar=net>0?"▼":net<0?"▲":"—";
+    return `<td class="${c}">${ar} ${avzUsd(Math.abs(net))}</td>`; };
+  const rows=tfs.map(tf=>{const t=a[tf]||{};
+    return `<tr><td>${tf}</td>`+
+      `<td>${t.oi==null?"—":avzUsd(t.oi)}</td>`+
+      `<td class="${avzCls(t.oiChg)}">${t.oiChg==null?"—":avzPct(t.oiChg)}</td>`+
+      `<td class="${avzCls(t.funding)}">${t.funding==null?"—":t.funding+"%"}</td>`+
+      cvdCell(t.cvdSpot)+cvdCell(t.cvdCoin)+cvdCell(t.cvdStable)+
+      liqCell(t)+`</tr>`;
+  }).join("");
+  const fundCls=a.funding>0?"up2":a.funding<0?"dn2":"nt2";
+  const px=a.price==null?"—":"$"+Number(a.price).toLocaleString("es-ES",{maximumFractionDigits:6});
+  const stamp=AVIZOR.updated?`actualizado ${new Date(AVIZOR.updated).toLocaleString("es-ES")}`:"";
+  return `<div class="avz"><h4>Avizor · <span class="tag">Coinalyze (agregado)</span></h4>`+
+    `<div class="fund">Precio ref. <b>${px}</b> · Funding actual <b class="${fundCls}">${a.funding==null?"—":a.funding+"%"}</b> · OI actual <b>${a.oi==null?"—":avzUsd(a.oi)}</b></div>`+
+    `<table class="avzt"><tr><th>TF</th><th>OI</th><th>%Δ OI</th><th>Funding</th><th>CVD Spot</th><th>CVD Fut.coin</th><th>CVD Fut.stable</th><th>Liq L−S</th></tr>${rows}</table>`+
+    `<div class="stamp">${stamp} · Liq L−S: ▲ verde = shorts liquidados (alcista) · ▼ rojo = longs liquidados (bajista)</div></div>`;
+}
 
 async function klines(sym,itv){
   const r=await fetch(`${BASE}?symbol=${sym}&interval=${itv}&limit=210`);
@@ -191,7 +245,7 @@ function scanRow(name,sym,d,idx){
     <div class="sigmas">${sigs}</div>
     <div class="chev">▾</div>
   </div>
-  <div class="detail" id="d${idx}">${detailTable(d)}</div>`;
+  <div class="detail" id="d${idx}">${detailTable(d)}${avizorBlock(sym)}</div>`;
 }
 window.toggle=i=>{const el=document.getElementById("d"+i);if(el)el.classList.toggle("open");};
 
@@ -205,6 +259,7 @@ async function run(){
   busy=true;
   const btn=$("scan");btn.disabled=true;
   const list=$("list");list.innerHTML="";
+  await loadAvizor();                     // trae los derivados frescos (avizor.json) en cada escaneo
   const results=[];let done=0,fail=[];
   for(const[sym,name]of ASSETS){
     $("status").textContent=`Analizando ${name}… (${done+1}/${ASSETS.length})`;
