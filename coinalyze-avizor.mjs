@@ -24,7 +24,11 @@ const BASE = "https://api.coinalyze.net/v1";
 const ASSETS = ["BTC","ETH","BCH","SOL","AAVE","LTC","LINK","AVAX","TON","XRP","SUI","APT","XLM","ADA","ARB","HBAR","ZEC","TAO","INJ","NEAR","RENDER","DOGE","QNT","VIRTUAL","IOTA","ENA","PEPE"];
 const TF_LABELS = ["1H","4H","12H","D"];
 const TF_HOURS = { "1H":1, "4H":4, "12H":12, "D":24 };
-const MAX_SYMS = 20;                // nº de mercados que agregamos por grupo (tope de Coinalyze por llamada) → OI/CVD más cercanos al agregado real
+// Coinalyze limita por PESO (símbolos × llamadas): más símbolos = corridas más lentas.
+// Solución: solo BTC agrega muchos exchanges (OI ~24B, preciso); el resto van ligeros → corridas rápidas (~20 min).
+const SYMS_BTC  = 20;               // BTC: precisión alta (agrega ~todos los exchanges)
+const SYMS_REST = 6;                // ETH y demás: ligero → rápido, sin quedarse clavado
+const capFor = base => base === "BTC" ? SYMS_BTC : SYMS_REST;
 const STABLES = new Set(["USDT","USDC","BUSD","USDE","FDUSD","DAI"]);
 
 let calls = 0;
@@ -92,8 +96,8 @@ async function buildGroups() {
   return g;
 }
 
-async function ohlcv(list) {                            // devuelve la respuesta cruda (para net + precio)
-  const syms = list.slice(0, MAX_SYMS).join(",");
+async function ohlcv(list, cap) {                       // devuelve la respuesta cruda (para net + precio)
+  const syms = list.slice(0, cap).join(",");
   const to = nowSec(), from = to - 3600 * 24 * 30;
   return jget("/ohlcv-history", { symbols: syms, interval: "1hour", from, to });
 }
@@ -101,7 +105,8 @@ async function ohlcv(list) {                            // devuelve la respuesta
 async function avizorAsset(base, grp) {
   const out = {};
   const to = nowSec(), from = to - 3600 * 24 * 30;
-  const perpSyms = grp.perps.slice(0, MAX_SYMS).join(",");
+  const cap = capFor(base);                             // BTC agrega 20 exchanges; el resto 6 (rápido)
+  const perpSyms = grp.perps.slice(0, cap).join(",");
 
   // Funding actual (media exchanges)
   try { const f = await jget("/funding-rate", { symbols: perpSyms }); const v = f.map(x => x.value).filter(x => x != null); out.funding = v.length ? +(sum(v) / v.length).toFixed(4) : null; }
@@ -129,7 +134,7 @@ async function avizorAsset(base, grp) {
   for (const [gk, list] of [["spot", grp.spot], ["coin", grp.coin], ["stable", grp.stable]]) {
     if (!list || !list.length) continue;
     try {
-      const raw = await ohlcv(list);
+      const raw = await ohlcv(list, cap);
       cvdSer[gk] = aggByT(raw, p => (2 * (p.bv || 0) - (p.v || 0)));
       const px = lastCloseAvg(raw);
       if (px != null && (gk === "stable" || price == null)) price = px;   // precio de referencia del perp lineal
