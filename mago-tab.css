@@ -1,0 +1,73 @@
+/* ===== Barra de pestañas Carmon (Panel / Escáner) ===== */
+#carmon-tabbar{position:sticky;top:0;z-index:9999;display:flex;gap:8px;justify-content:center;align-items:center;
+  padding:9px 10px;background:#0e1613;border-bottom:1px solid #33473E}
+#carmon-tabbar button{font-family:'IBM Plex Sans',system-ui,sans-serif;cursor:pointer;border:1px solid #33473E;
+  background:#1B2A24;color:#9DB0A6;border-radius:9px;padding:8px 18px;font-weight:600;font-size:14px;transition:.12s}
+#carmon-tabbar button:hover{background:#213229;color:#ECE7D6}
+#carmon-tabbar button.active{background:#EAD98A;color:#1A2621;border-color:#EAD98A}
+#root[hidden]{display:none}
+
+/* ===== Escáner MAGO — TODO aislado bajo #mago-scanner (variables incluidas) ===== */
+#mago-scanner{
+  --bg:#121C18; --surface:#1B2A24; --surface2:#213229; --line:#33473E;
+  --text:#ECE7D6; --muted:#9DB0A6; --gold:#EAD98A; --green:#6FBF8E; --red:#E39A9A;
+  --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --cBull:#a5d6a7; --cBear:#ef9a9a; --cNeut:#fff59d; --cWarn:#ffcc80;
+  --cSqzGL:#2ef527; --cSqzGD:#10780d; --cSqzRL:#d90606; --cSqzRD:#620000;
+  --cBg:#eceff1; --cFrame:#b0bec5; --cHdr:#cfd8dc; --cLbl:#455a64; --cTxtD:#1a1a1a;
+  --cAdx1:#e3f2fd; --cAdx2:#bbdefb; --cAdx3:#90caf9; --cAdx4:#64b5f6;
+  background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.4;min-height:100vh}
+#mago-scanner[hidden]{display:none}
+#mago-scanner *{box-sizing:border-box}
+#mago-scanner .wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px}
+#mago-scanner header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+#mago-scanner .logo{width:38px;height:38px;border-radius:10px;background:#22402F;display:flex;align-items:center;justify-content:center}
+#mago-scanner .brand{font-size:22px;font-weight:700}
+#mago-scanner .brand .badge{font-family:var(--mono);font-size:11px;color:#1A2621;background:var(--gold);border-radius:5px;padding:2px 7px;margin-left:6px}
+#mago-scanner .sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:2px 0 16px}
+#mago-scanner .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+#mago-scanner button{font-family:var(--sans);cursor:pointer}
+#mago-scanner .btn{background:var(--gold);color:#1A2621;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px}
+#mago-scanner .btn:disabled{opacity:.5;cursor:wait}
+#mago-scanner .status{font-family:var(--mono);font-size:12px;color:var(--muted)}
+#mago-scanner .legend{font-size:12px;color:var(--muted);margin-left:auto}
+#mago-scanner .legend b{color:var(--green)} #mago-scanner .legend .s{color:var(--red)} #mago-scanner .legend .w{color:var(--gold)}
+#mago-scanner .row{display:grid;grid-template-columns:132px 96px 62px 116px 1fr 28px;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:7px;cursor:pointer;transition:background .12s}
+#mago-scanner .row:hover{background:var(--surface2)}
+#mago-scanner .row.canta{border-color:var(--gold)}
+#mago-scanner .asset{font-weight:600;font-size:14px}
+#mago-scanner .asset small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+#mago-scanner .price{font-family:var(--mono);font-size:13px;text-align:right}
+#mago-scanner .chg{font-family:var(--mono);font-size:12px;text-align:right}
+#mago-scanner .chg.up{color:var(--green)} #mago-scanner .chg.dn{color:var(--red)}
+#mago-scanner .verd{font-family:var(--mono);font-size:12px;font-weight:600;text-align:center;border-radius:6px;padding:5px 4px}
+#mago-scanner .verd.L{background:rgba(111,191,142,.15);color:var(--green);border:1px solid #3E7A57}
+#mago-scanner .verd.S{background:rgba(227,154,154,.15);color:var(--red);border:1px solid #7a3b3b}
+#mago-scanner .verd.E{background:rgba(234,217,138,.10);color:var(--gold);border:1px solid #7a5f2e}
+#mago-scanner .sigmas{display:flex;gap:5px;flex-wrap:wrap}
+#mago-scanner .sig{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;background:#14201B;border:1px solid var(--line);color:var(--muted)}
+#mago-scanner .sig b{color:var(--text)}
+#mago-scanner .sig.pos{border-color:#3E7A57} #mago-scanner .sig.pos b{color:var(--green)}
+#mago-scanner .sig.neg{border-color:#7a3b3b} #mago-scanner .sig.neg b{color:var(--red)}
+#mago-scanner .chev{color:var(--muted);text-align:center}
+#mago-scanner .detail{display:none;margin:2px 0 12px;overflow-x:auto}
+#mago-scanner .detail.open{display:block}
+#mago-scanner table.mago{border-collapse:separate;border-spacing:0;background:var(--cBg);border:2px solid var(--cFrame);border-radius:8px;overflow:hidden;font-size:13px;min-width:560px}
+#mago-scanner table.mago th,#mago-scanner table.mago td{padding:6px 9px;text-align:center;color:var(--cTxtD);border:1px solid var(--cFrame);white-space:pre-line}
+#mago-scanner table.mago th{background:var(--cHdr);color:var(--cLbl);font-family:var(--mono);font-weight:600}
+#mago-scanner td.tf{background:var(--cHdr);color:var(--cLbl);font-weight:600}
+#mago-scanner .fondo td{font-weight:600}
+#mago-scanner .verdrow td{font-size:15px;font-weight:700}
+#mago-scanner .sep td{padding:2px;background:var(--cFrame)}
+#mago-scanner .avz{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px;min-width:720px}
+#mago-scanner .avz h4{margin:0 0 8px;font-size:12px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#mago-scanner .avz h4 .tag{color:var(--gold)}
+#mago-scanner .avz .fund{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:8px}
+#mago-scanner .avz .fund b{color:var(--gold)}
+#mago-scanner table.avzt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+#mago-scanner table.avzt th,#mago-scanner table.avzt td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+#mago-scanner table.avzt th{color:var(--muted);font-weight:600}
+#mago-scanner table.avzt td:first-child,#mago-scanner table.avzt th:first-child{text-align:left;color:var(--text);font-weight:600}
+#mago-scanner .avz .up2{color:var(--green)} #mago-scanner .avz .dn2{color:var(--red)} #mago-scanner .avz .nt2{color:var(--muted)}
+#mago-scanner .avz .none{font-size:12px;color:var(--muted)}
+#mago-scanner .avz .stamp{font-size:10px;color:var(--muted);margin-top:7px;font-family:var(--mono)}
